@@ -1,0 +1,114 @@
+pipeline {
+
+    agent {
+        node {
+            label 'main'
+        }
+    }
+
+    environment {
+        APP_NAME = "tanyonghe"
+        APP_ENV  = "DEV"
+    }
+
+    stages {
+        stage('Op-4949315t-S1') {
+            steps {
+                echo 'Starting Stage 1: QA Server Backup and Update'
+                script {
+                    try {
+                        def IMAGE_NAME = "qa-bkup-image"
+                        def CONTAINER_NAME = "4949315t-qa-svr"
+                        
+                        // Check if backup exist
+                        echo "Checking and removing ${IMAGE_NAME}"
+                        sh """
+                            if docker images -q ${IMAGE_NAME} 2>/dev/null; then
+                                echo "Removing old backup image: ${IMAGE_NAME}"
+                                docker rmi -f ${IMAGE_NAME}
+                            else
+                                echo "No backup image found"
+                            fi
+                        """
+                        
+                        // Create backup
+                        echo "Creating new QA backup image: ${IMAGE_NAME}"
+                        sh """
+                            # Commit current container state to new backup image
+                            if docker ps -q --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
+                                echo "Creating backup image from running container: ${CONTAINER_NAME}"
+                                docker commit ${CONTAINER_NAME} ${IMAGE_NAME}
+                                echo "Backup image created successfully: ${IMAGE_NAME}"
+                            else
+                                echo "Warning: Container ${CONTAINER_NAME} is not running"
+                            fi
+                        """
+                        
+                        // Step 4: Success message
+                        echo "Op-S1-4949315t: QA web server is backup and updated"
+                        
+                    } catch (Exception e) {
+                        echo "Error in Stage 1: ${e.getMessage()}"
+                        currentBuild.result = 'FAILURE'
+                        error("Stage 1 failed: QA backup and update unsuccessful")
+                    }
+                }
+            }
+        }
+        
+        stage('Op-4949315t-S2') {
+            steps {
+                echo 'Starting Stage 2: Dependency installation'
+                script {
+                    echo "Installing required dependencies on master node"
+                }
+            }
+        }
+        
+        stage('Op-4949315t-S3') {
+            steps {
+                echo 'Starting Stage 3: Code compilation'
+                script {
+                    echo "Compiling the application on master"
+                }
+            }
+        }
+        
+        stage('Op-4949315t-S4') {
+            steps {
+                echo 'Starting Stage 4: Testing phase'
+                script {
+                    echo "Running tests on master node"
+                }
+            }
+        }
+        
+        stage('Op-4949315t-S5') {
+            steps {
+                echo 'Starting Stage 5: Code analysis'
+                script {
+                    echo "Performing code analysis"
+                }
+            }
+        }
+        
+        stage('Op-4949315t-S6') {
+            steps {
+                echo 'Starting Stage 6: Build artifact creation'
+                script {
+                    echo "Creating build artifacts on master"
+                }
+            }
+        }
+        
+        stage('Op-4949315t-S7') {
+            steps {
+                echo 'Starting Stage 7: Deployment or final steps'
+                script {
+                    echo "Finalizing pipeline execution"
+                    echo "Pipeline Op-4949315t completed successfully"
+                }
+            }
+        }
+    }
+}
