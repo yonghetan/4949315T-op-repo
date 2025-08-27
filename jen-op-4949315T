@@ -18,7 +18,7 @@ pipeline {
                 script {
                     try {
                         def IMAGE_NAME = "qa-bkup-image"
-                        def CONTAINER_NAME = "4949315t-qa-svr"
+                        def CONTAINER_NAME = "4949315T-qa-svr"
                         
                         // Check if backup exist
                         echo "Checking and removing ${IMAGE_NAME}"
