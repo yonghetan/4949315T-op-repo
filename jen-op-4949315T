@@ -1,12 +1,10 @@
 pipeline {
 
     agent {
-        node {
-            label 'master'
-        }
         docker {
-            image 'puppet/bolt:latest'  // Use official Bolt image
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
+            image 'puppet/bolt:latest'
+            args '-v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker'
+            label 'master'  // Add label here if needed
         }
     }
 
