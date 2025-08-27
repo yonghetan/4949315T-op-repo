@@ -325,7 +325,7 @@ pipeline {
                         
                         echo "Op-4949315t-S4: Prod web server is backup and updated"
                     } catch (Exception e) {
-                        echo "Error in Stage 1: ${e.getMessage()}"
+                        echo "Error in Stage 4: ${e.getMessage()}"
                         currentBuild.result = 'FAILURE'
                         error("Stage 4 failed: Prod backup and update unsuccessful")
                     }
@@ -335,9 +335,46 @@ pipeline {
         
         stage('Op-4949315t-S5') {
             steps {
-                echo 'Starting Stage 5: Code analysis'
+                echo 'Starting Stage 5: Dependency installation and Web Test'
                 script {
-                    echo "Performing code analysis"
+                    try {
+                        echo "Installing required dependencies on master node"
+                        echo "Performing web test on Prod container via host VM"
+                        
+                        // Execute curl command to test the web server
+                        sh """
+                            curl -Is http://localhost:33500 | head -n 1 > /tmp/prod-result-file
+                            echo "Web test result:"
+                            cat /tmp/prod-result-file || echo "Result file not found"
+                        """
+                        
+                        // Verify the test result
+                        def testResult = sh(script: """
+                            if [ -f /tmp/prod-result-file ]; then
+                                cat /tmp/prod-result-file
+                            else
+                                echo "FILE_NOT_FOUND"
+                            fi
+                        """, returnStdout: true).trim()
+                        
+                        echo "Raw test result: '${testResult}'"
+                        
+                        if (testResult.contains("HTTP/1.1 200 OK")) {
+                            echo "SUCCESS: Web test passed! Prod server is responding correctly."
+                            echo "Result file content: ${testResult}"
+                        } else if (testResult == "FILE_NOT_FOUND") {
+                            error "ERROR: Result file not found. Web test may have failed."
+                        } else {
+                            error "ERROR: Web test failed. Expected 'HTTP/1.1 200 OK' but got: ${testResult}"
+                        }
+                        
+                        echo "Op-4949315t-S5: Checking on whether Prod server is running after update"
+                        
+                    } catch (Exception e) {
+                        echo "Error in Stage 5: ${e.getMessage()}"
+                        currentBuild.result = 'FAILURE'
+                        error("Stage 5 failed: Dependency installation or web test unsuccessful")
+                    }
                 }
             }
         }
