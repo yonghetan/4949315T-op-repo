@@ -173,11 +173,7 @@ pipeline {
                             echo "Op-4949315t-S3: QA server fails after update and is rolled back"
                             
                             def backupExists = sh(script: """
-                                if docker images -q ${IMAGE_NAME} 2>/dev/null; then
-                                    echo "EXISTS"
-                                else
-                                    echo "NOT_EXISTS"
-                                fi
+                                docker images -q ${IMAGE_NAME} 2>/dev/null > /dev/null && echo "EXISTS" || echo "NOT_EXISTS"
                             """, returnStdout: true).trim()
                             
                             if (backupExists == "EXISTS") {
