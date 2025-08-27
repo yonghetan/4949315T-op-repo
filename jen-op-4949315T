@@ -4,6 +4,10 @@ pipeline {
         node {
             label 'master'
         }
+        docker {
+            image 'puppet/bolt:latest'  // Use official Bolt image
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
     }
 
     environment {
