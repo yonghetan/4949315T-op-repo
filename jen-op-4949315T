@@ -381,20 +381,126 @@ pipeline {
         
         stage('Op-4949315t-S6') {
             steps {
-                echo 'Starting Stage 6: Build artifact creation'
+                echo 'Starting Stage 6: Code compilation and Deployment Decision'
                 script {
-                    echo "Creating build artifacts on master"
+                    try {
+                        // Define variables within stage scope
+                        def IMAGE_NAME = "prod-bkup-image"  // Your backup image name
+                        def CONTAINER_NAME = "4949315T-prod-svr"
+                        
+                        def deploymentChoice = input(
+                            id: 'DeploymentChoice', 
+                            message: 'Choose deployment action:', 
+                            parameters: [
+                                choice(
+                                    name: 'ACTION',
+                                    choices: ['Proceed to release to Prod web server to production', 'Roll back Prod web server'],
+                                    description: 'Select deployment action based on Prod server status'
+                                )
+                            ]
+                        )
+                        
+                        echo "User selected: ${deploymentChoice}"
+                        
+                        if (deploymentChoice == 'Proceed to release to Prod web server to production') {
+                            def containerId = sh(script: """
+                                    docker ps -aq --filter "name=${CONTAINER_NAME}" | head -n 1
+                            """, returnStdout: true).trim()
+                            
+                            if (!containerId) {
+                                error "ERROR: Container ${CONTAINER_NAME} not found. Please check the container name."
+                            }
+                            
+                            echo "Found container ID: ${containerId}"
+                            
+                            // Check if container is running
+                            def isRunning = sh(script: """
+                                if docker ps -q --filter "id=${containerId}" >/dev/null 2>&1; then
+                                    echo "RUNNING"
+                                else
+                                    echo "STOPPED"
+                                fi
+                            """, returnStdout: true).trim()
+                            
+                            echo "Container status: ${isRunning}"
+                            
+                            if (isRunning == "RUNNING") {
+                                echo "Op-4949315t-S6: Proceed to release Prod web server to production"
+                            } else {
+                                error "ERROR: Cannot proceed to release - Prod server is not running. Please choose rollback instead."
+                            }                            
+                        } else if (deploymentChoice == 'Roll back Prod web server') {                            
+                            def backupExists = sh(script: """
+                                docker images -q ${IMAGE_NAME} 2>/dev/null > /dev/null && echo "EXISTS" || echo "NOT_EXISTS"
+                            """, returnStdout: true).trim()
+                            
+                            if (backupExists == "EXISTS") {
+                                echo "Rolling back Prod server using backup image: ${IMAGE_NAME}"
+                                
+                                sh """
+                                    if docker ps -q --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
+                                        echo "Stopping current container: ${CONTAINER_NAME}"
+                                        docker stop ${CONTAINER_NAME}
+                                    fi
+                                    if docker ps -aq --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
+                                        echo "Removing current container: ${CONTAINER_NAME}"
+                                        docker rm ${CONTAINER_NAME}
+                                    fi
+                                    
+                                    echo "Starting rolled back container with full configuration"
+                                    docker run -d -it \
+                                        --network customnetwork \
+                                        --privileged \
+                                        -p 33500:80 \
+                                        -h 4949315T-prod-svr.localdomain \
+                                        --name ${CONTAINER_NAME} \
+                                        --add-host=sddo-vm.localdomain:172.20.113.176 \
+                                        --ip=192.168.100.220 \
+                                        --mount source=4949315T-prod-svr-vol01,target=/mnt/4949315T-prod-svr-vol01 \
+                                        ${IMAGE_NAME} \
+                                        /sbin/init
+                                    
+                                    sleep 10
+                                    if docker ps -q --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
+                                        echo "Rollback successful: Container ${CONTAINER_NAME} is running from backup image"
+                                        echo "Container is running with full network configuration and privileged mode"
+                                    else
+                                        echo "WARNING: Container may not have started properly. Checking status..."
+                                        docker ps -a --filter "name=${CONTAINER_NAME}"
+                                        error "Container failed to start during rollback"
+                                    fi
+                                """
+                            } else {
+                                error "ERROR: Backup image ${IMAGE_NAME} not found. Cannot perform rollback."
+                            }
+                            
+                            echo "Op-4949315t-S6: Prod web server is rolled back"
+
+                            // Abort all subsequent stages
+                            error('Aborting all subsequent stages due to Prod server rollback')
+                            
+                        } else {
+                            error "ERROR: Invalid deployment choice selected"
+                        }
+                        
+                    } catch (Exception e) {
+                        if (e.getMessage().contains('Aborting all subsequent stages')) {
+                            echo "Rollback completed. Subsequent stages aborted as expected."
+                            currentBuild.result = 'UNSTABLE'
+                            throw e
+                        } else {
+                            echo "Error in Stage 3: ${e.getMessage()}"
+                            currentBuild.result = 'FAILURE'
+                            error("Stage 3 failed: ${e.getMessage()}")
+                        }
+                    }
                 }
             }
         }
         
         stage('Op-4949315t-S7') {
             steps {
-                echo 'Starting Stage 7: Deployment or final steps'
-                script {
-                    echo "Finalizing pipeline execution"
-                    echo "Pipeline Op-4949315t completed successfully"
-                }
+                echo 'Op-4949315t-S7: Prod web server is monitored and ready to serve.'
             }
         }
     }
