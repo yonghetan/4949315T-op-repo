@@ -77,7 +77,7 @@ pipeline {
                         // EXECUTE BOLT PLAN AFTER SUCCESSFUL BACKUP
                         echo "Executing Bolt plan on QA server..."
                         sh """
-                            bolt script run operate/scripts/4949315T_script.sh --targets ${CONTAINER_NAME} -u runscript -p "Welcome2" --no-host-key-check --run-as root
+                            bolt script run 4949315T_script.sh --targets ${CONTAINER_NAME} -u runscript -p "Welcome2" --no-host-key-check --run-as root
                         """
                         
                         echo "Op-S1-4949315t: QA web server is backup and updated"
@@ -320,7 +320,7 @@ pipeline {
                         // EXECUTE BOLT PLAN AFTER SUCCESSFUL BACKUP
                         echo "Executing Bolt plan on Prod server..."
                         sh """
-                            bolt script run operate/scripts/4949315T_script.sh --targets ${CONTAINER_NAME} -u runscript -p "Welcome2" --no-host-key-check --run-as root
+                            bolt script run 4949315T_script.sh --targets ${CONTAINER_NAME} -u runscript -p "Welcome2" --no-host-key-check --run-as root
                         """
                         
                         echo "Op-4949315t-S4: Prod web server is backup and updated"
