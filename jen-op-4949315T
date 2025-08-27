@@ -87,9 +87,46 @@ pipeline {
         
         stage('Op-4949315t-S2') {
             steps {
-                echo 'Starting Stage 2: Dependency installation'
+                echo 'Starting Stage 2: Dependency installation and Web Test'
                 script {
-                    echo "Installing required dependencies on master node"
+                    try {
+                        echo "Installing required dependencies on master node"
+                        echo "Performing web test on QA container via host VM"
+                        
+                        // Execute curl command to test the web server
+                        sh """
+                            curl -Is http://localhost:33200 | head -n 1 > /tmp/qa-result-file
+                            echo "Web test result:"
+                            cat /tmp/qa-result-file || echo "Result file not found"
+                        """
+                        
+                        // Verify the test result
+                        def testResult = sh(script: """
+                            if [ -f /tmp/qa-result-file ]; then
+                                cat /tmp/qa-result-file
+                            else
+                                echo "FILE_NOT_FOUND"
+                            fi
+                        """, returnStdout: true).trim()
+                        
+                        echo "Raw test result: '${testResult}'"
+                        
+                        if (testResult.contains("HTTP/1.1 200 OK")) {
+                            echo "SUCCESS: Web test passed! QA server is responding correctly."
+                            echo "Result file content: ${testResult}"
+                        } else if (testResult == "FILE_NOT_FOUND") {
+                            error "ERROR: Result file not found. Web test may have failed."
+                        } else {
+                            error "ERROR: Web test failed. Expected 'HTTP/1.1 200 OK' but got: ${testResult}"
+                        }
+                        
+                        echo “Op-4949315t-S2: Checking on whether QA server is running after update"
+                        
+                    } catch (Exception e) {
+                        echo "Error in Stage 2: ${e.getMessage()}"
+                        currentBuild.result = 'FAILURE'
+                        error("Stage 2 failed: Dependency installation or web test unsuccessful")
+                    }
                 }
             }
         }
