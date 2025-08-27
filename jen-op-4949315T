@@ -43,7 +43,7 @@ pipeline {
                         
                         // Check if container is running
                         def isRunning = sh(script: """
-                            if docker ps -q --filter "id=${containerId}" 2>/dev/null; then
+                             if docker ps -q --filter "id=${containerId}" >/dev/null 2>&1; then
                                 echo "RUNNING"
                             else
                                 echo "STOPPED"
@@ -173,7 +173,7 @@ pipeline {
                             
                             // Check if container is running
                             def isRunning = sh(script: """
-                                if docker ps -q --filter "id=${containerId}" 2>/dev/null; then
+                                if docker ps -q --filter "id=${containerId}" >/dev/null 2>&1; then
                                     echo "RUNNING"
                                 else
                                     echo "STOPPED"
