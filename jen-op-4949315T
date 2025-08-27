@@ -31,9 +31,6 @@ pipeline {
                             fi
                         """
 
-                        echo "DEBUG: Listing all containers for reference:"
-                        sh "docker ps -a"
-
                         def containerId = sh(script: """
                             # Try exact name match first
                             ID=\$(docker ps -q --filter "name=^${CONTAINER_NAME}\$" 2>/dev/null)
