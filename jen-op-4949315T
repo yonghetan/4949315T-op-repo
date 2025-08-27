@@ -33,7 +33,7 @@ pipeline {
 
                         def containerId = sh(script: """
                             # Try exact name match first
-                            ID=\$(docker ps -q --filter "name=^${CONTAINER_NAME}\$" 2>/dev/null)
+                            ID=\$(docker ps -q --filter 'name=^${CONTAINER_NAME}\$' 2>/dev/null)
                             if [ -z "\$ID" ]; then
                                 # Try partial name match if exact fails
                                 ID=\$(docker ps -q --filter "name=${CONTAINER_NAME}" 2>/dev/null)
