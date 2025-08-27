@@ -179,9 +179,7 @@ pipeline {
                             if (backupExists == "EXISTS") {
                                 echo "Rolling back QA server using backup image: ${IMAGE_NAME}"
                                 
-                                // Stop and remove current container if it exists
                                 sh """
-                                    # Stop and remove current container if it exists
                                     if docker ps -q --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
                                         echo "Stopping current container: ${CONTAINER_NAME}"
                                         docker stop ${CONTAINER_NAME}
@@ -191,7 +189,6 @@ pipeline {
                                         docker rm ${CONTAINER_NAME}
                                     fi
                                     
-                                    # Provision rollback container with exact specifications
                                     echo "Starting rolled back container with full configuration"
                                     docker run -d -it \
                                         --network customnetwork \
@@ -205,8 +202,7 @@ pipeline {
                                         ${IMAGE_NAME} \
                                         /sbin/init
                                     
-                                    # Verify container started
-                                    sleep 10  # Give more time for privileged container with init
+                                    sleep 10
                                     if docker ps -q --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
                                         echo "Rollback successful: Container ${CONTAINER_NAME} is running from backup image"
                                         echo "Container is running with full network configuration and privileged mode"
@@ -230,9 +226,9 @@ pipeline {
                         
                     } catch (Exception e) {
                         if (e.getMessage().contains('Aborting all subsequent stages')) {
-                            // This is expected behavior for rollback, don't mark as failure
                             echo "Rollback completed. Subsequent stages aborted as expected."
                             currentBuild.result = 'UNSTABLE'
+                            throw e
                         } else {
                             echo "Error in Stage 3: ${e.getMessage()}"
                             currentBuild.result = 'FAILURE'
