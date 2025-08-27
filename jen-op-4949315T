@@ -161,20 +161,32 @@ pipeline {
                         echo "User selected: ${deploymentChoice}"
                         
                         if (deploymentChoice == 'Proceed to Roll out to Prod server') {
-                            def isQaRunning = sh(script: """
-                                if docker ps -q --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
+                            def containerId = sh(script: """
+                                    docker ps -aq --filter "name=${CONTAINER_NAME}" | head -n 1
+                            """, returnStdout: true).trim()
+                            
+                            if (!containerId) {
+                                error "ERROR: Container ${CONTAINER_NAME} not found. Please check the container name."
+                            }
+                            
+                            echo "Found container ID: ${containerId}"
+                            
+                            // Check if container is running
+                            def isRunning = sh(script: """
+                                if docker ps -q --filter "id=${containerId}" 2>/dev/null; then
                                     echo "RUNNING"
                                 else
-                                    echo "NOT_RUNNING"
+                                    echo "STOPPED"
                                 fi
                             """, returnStdout: true).trim()
                             
-                            if (isQaRunning == "RUNNING") {
+                            echo "Container status: ${isRunning}"
+                            
+                            if (isRunning == "RUNNING") {
                                 echo "Op-4949315t-S3: Proceed to roll out to Prod server"
                             } else {
                                 error "ERROR: Cannot proceed to Prod - QA server is not running. Please choose rollback instead."
-                            }
-                            
+                            }                            
                         } else if (deploymentChoice == 'Roll back QA server') {
                             echo "Op-4949315t-S3: QA server fails after update and is rolled back"
                             
