@@ -75,6 +75,12 @@ pipeline {
                         }
                         
                         echo "Op-S1-4949315t: QA web server is backup and updated"
+
+                        // EXECUTE BOLT PLAN AFTER SUCCESSFUL BACKUP
+                        echo "Executing Bolt plan on QA server..."
+                        sh """
+                            bolt plan run operate::4949315T_script --targets ${CONTAINER_NAME}
+                        """
                         
                     } catch (Exception e) {
                         echo "Error in Stage 1: ${e.getMessage()}"
