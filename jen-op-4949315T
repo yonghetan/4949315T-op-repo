@@ -74,14 +74,13 @@ pipeline {
                             """
                         }
                         
-                        echo "Op-S1-4949315t: QA web server is backup and updated"
-
                         // EXECUTE BOLT PLAN AFTER SUCCESSFUL BACKUP
                         echo "Executing Bolt plan on QA server..."
                         sh """
                             bolt script run operate/scripts/4949315T_script.sh --targets ${CONTAINER_NAME} -u runscript -p "Welcome2" --no-host-key-check --run-as root
                         """
                         
+                        echo "Op-S1-4949315t: QA web server is backup and updated"
                     } catch (Exception e) {
                         echo "Error in Stage 1: ${e.getMessage()}"
                         currentBuild.result = 'FAILURE'
@@ -187,9 +186,7 @@ pipeline {
                             } else {
                                 error "ERROR: Cannot proceed to Prod - QA server is not running. Please choose rollback instead."
                             }                            
-                        } else if (deploymentChoice == 'Roll back QA server') {
-                            echo "Op-4949315t-S3: QA server fails after update and is rolled back"
-                            
+                        } else if (deploymentChoice == 'Roll back QA server') {                            
                             def backupExists = sh(script: """
                                 docker images -q ${IMAGE_NAME} 2>/dev/null > /dev/null && echo "EXISTS" || echo "NOT_EXISTS"
                             """, returnStdout: true).trim()
@@ -230,11 +227,12 @@ pipeline {
                                         error "Container failed to start during rollback"
                                     fi
                                 """
-                                
                             } else {
                                 error "ERROR: Backup image ${IMAGE_NAME} not found. Cannot perform rollback."
                             }
                             
+                            echo "Op-4949315t-S3: QA server fails after update and is rolled back"
+
                             // Abort all subsequent stages
                             error('Aborting all subsequent stages due to QA server rollback')
                             
@@ -259,9 +257,78 @@ pipeline {
         
         stage('Op-4949315t-S4') {
             steps {
-                echo 'Starting Stage 4: Testing phase'
+                echo 'Starting Stage 4: Prod Server Backup and Update'
                 script {
-                    echo "Running tests on master node"
+                    try {
+                        def IMAGE_NAME = "prod-bkup-image"
+                        def CONTAINER_NAME = "4949315T-prod-svr"
+                        
+                        // Check if backup exist
+                        echo "Checking and removing ${IMAGE_NAME}"
+                        sh """
+                            if docker images -q ${IMAGE_NAME} 2>/dev/null; then
+                                echo "Removing old backup image: ${IMAGE_NAME}"
+                                docker rmi -f ${IMAGE_NAME}
+                            else
+                                echo "No backup image found"
+                            fi
+                        """
+
+                        def containerId = sh(script: """
+                            docker ps -aq --filter "name=${CONTAINER_NAME}" | head -n 1
+                        """, returnStdout: true).trim()
+                        
+                        if (!containerId) {
+                            error "ERROR: Container ${CONTAINER_NAME} not found. Please check the container name."
+                        }
+                        
+                        echo "Found container ID: ${containerId}"
+                        
+                        // Check if container is running
+                        def isRunning = sh(script: """
+                             if docker ps -q --filter "id=${containerId}" >/dev/null 2>&1; then
+                                echo "RUNNING"
+                            else
+                                echo "STOPPED"
+                            fi
+                        """, returnStdout: true).trim()
+                        
+                        echo "Container status: ${isRunning}"
+                        
+                        if (isRunning == "RUNNING") {
+                            echo "Container ${containerId} is running - creating backup"
+                            sh """
+                                docker commit ${containerId} ${IMAGE_NAME}
+                                echo "Backup image created successfully: ${IMAGE_NAME}"
+                            """
+                        } else {
+                            echo "Container ${containerId} is stopped - starting container first"
+                            sh """
+                                docker start ${containerId}
+                                sleep 10
+                                # Verify container started
+                                if docker ps -q --filter "id=${containerId}" 2>/dev/null; then
+                                    docker commit ${containerId} ${IMAGE_NAME}
+                                    echo "Backup image created successfully: ${IMAGE_NAME}"
+                                else
+                                    echo "ERROR: Failed to start container ${containerId}"
+                                    exit 1
+                                fi
+                            """
+                        }
+                        
+                        // EXECUTE BOLT PLAN AFTER SUCCESSFUL BACKUP
+                        echo "Executing Bolt plan on Prod server..."
+                        sh """
+                            bolt script run operate/scripts/4949315T_script.sh --targets ${CONTAINER_NAME} -u runscript -p "Welcome2" --no-host-key-check --run-as root
+                        """
+                        
+                        echo "Op-4949315t-S4: Prod web server is backup and updated"
+                    } catch (Exception e) {
+                        echo "Error in Stage 1: ${e.getMessage()}"
+                        currentBuild.result = 'FAILURE'
+                        error("Stage 4 failed: Prod backup and update unsuccessful")
+                    }
                 }
             }
         }
