@@ -133,9 +133,116 @@ pipeline {
         
         stage('Op-4949315t-S3') {
             steps {
-                echo 'Starting Stage 3: Code compilation'
+                echo 'Starting Stage 3: Code compilation and Deployment Decision'
                 script {
-                    echo "Compiling the application on master"
+                    try {
+                        // Define variables within stage scope
+                        def IMAGE_NAME = "qa-bkup-image"  // Your backup image name
+                        def CONTAINER_NAME = "4949315T-qa-svr"
+                        
+                        def deploymentChoice = input(
+                            id: 'DeploymentChoice', 
+                            message: 'Choose deployment action:', 
+                            parameters: [
+                                choice(
+                                    name: 'ACTION',
+                                    choices: ['Proceed to Roll out to Prod server', 'Roll back QA server'],
+                                    description: 'Select deployment action based on QA server status'
+                                )
+                            ]
+                        )
+                        
+                        echo "User selected: ${deploymentChoice}"
+                        
+                        if (deploymentChoice == 'Proceed to Roll out to Prod server') {
+                            def isQaRunning = sh(script: """
+                                if docker ps -q --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
+                                    echo "RUNNING"
+                                else
+                                    echo "NOT_RUNNING"
+                                fi
+                            """, returnStdout: true).trim()
+                            
+                            if (isQaRunning == "RUNNING") {
+                                echo "Op-4949315t-S3: Proceed to roll out to Prod server"
+                            } else {
+                                error "ERROR: Cannot proceed to Prod - QA server is not running. Please choose rollback instead."
+                            }
+                            
+                        } else if (deploymentChoice == 'Roll back QA server') {
+                            echo "Op-4949315t-S3: QA server fails after update and is rolled back"
+                            
+                            def backupExists = sh(script: """
+                                if docker images -q ${IMAGE_NAME} 2>/dev/null; then
+                                    echo "EXISTS"
+                                else
+                                    echo "NOT_EXISTS"
+                                fi
+                            """, returnStdout: true).trim()
+                            
+                            if (backupExists == "EXISTS") {
+                                echo "Rolling back QA server using backup image: ${IMAGE_NAME}"
+                                
+                                // Stop and remove current container if it exists
+                                sh """
+                                    # Stop and remove current container if it exists
+                                    if docker ps -q --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
+                                        echo "Stopping current container: ${CONTAINER_NAME}"
+                                        docker stop ${CONTAINER_NAME}
+                                    fi
+                                    if docker ps -aq --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
+                                        echo "Removing current container: ${CONTAINER_NAME}"
+                                        docker rm ${CONTAINER_NAME}
+                                    fi
+                                    
+                                    # Provision rollback container with exact specifications
+                                    echo "Starting rolled back container with full configuration"
+                                    docker run -d -it \
+                                        --network customnetwork \
+                                        --privileged \
+                                        -p 33200:80 \
+                                        -h 4949315T-qa-svr.localdomain \
+                                        --name ${CONTAINER_NAME} \
+                                        --add-host=sddo-vm.localdomain:172.20.113.176 \
+                                        --ip=192.168.100.110 \
+                                        --mount source=4949315T-qa-svr-vol01,target=/mnt/4949315T-qa-svr-vol01 \
+                                        ${IMAGE_NAME} \
+                                        /sbin/init
+                                    
+                                    # Verify container started
+                                    sleep 10  # Give more time for privileged container with init
+                                    if docker ps -q --filter "name=${CONTAINER_NAME}" 2>/dev/null; then
+                                        echo "Rollback successful: Container ${CONTAINER_NAME} is running from backup image"
+                                        echo "Container is running with full network configuration and privileged mode"
+                                    else
+                                        echo "WARNING: Container may not have started properly. Checking status..."
+                                        docker ps -a --filter "name=${CONTAINER_NAME}"
+                                        error "Container failed to start during rollback"
+                                    fi
+                                """
+                                
+                            } else {
+                                error "ERROR: Backup image ${IMAGE_NAME} not found. Cannot perform rollback."
+                            }
+                            
+                            // Abort all subsequent stages
+                            error('Aborting all subsequent stages due to QA server rollback')
+                            
+                        } else {
+                            error "ERROR: Invalid deployment choice selected"
+                        }
+                        
+                    } catch (Exception e) {
+                        if (e.getMessage().contains('Aborting all subsequent stages')) {
+                            // This is expected behavior for rollback, don't mark as failure
+                            echo "Rollback completed. Subsequent stages aborted as expected."
+                            currentBuild.result = 'UNSTABLE'
+                        } else {
+                            echo "Error in Stage 3: ${e.getMessage()}"
+                            currentBuild.result = 'FAILURE'
+                            error("Stage 3 failed: ${e.getMessage()}")
+                        }
+                    }
                 }
             }
         }
