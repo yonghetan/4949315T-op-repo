@@ -120,7 +120,7 @@ pipeline {
                             error "ERROR: Web test failed. Expected 'HTTP/1.1 200 OK' but got: ${testResult}"
                         }
                         
-                        echo “Op-4949315t-S2: Checking on whether QA server is running after update"
+                        echo "Op-4949315t-S2: Checking on whether QA server is running after update"
                         
                     } catch (Exception e) {
                         echo "Error in Stage 2: ${e.getMessage()}"
