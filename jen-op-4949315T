@@ -79,7 +79,7 @@ pipeline {
                         // EXECUTE BOLT PLAN AFTER SUCCESSFUL BACKUP
                         echo "Executing Bolt plan on QA server..."
                         sh """
-                            bolt script run operate/scripts/4949315T-script.sh --targets ${CONTAINER_NAME}
+                            bolt script run operate/scripts/4949315T_script.sh --targets ${CONTAINER_NAME} -u runscript -p "Welcome2" --no-host-key-check --run-as root
                         """
                         
                     } catch (Exception e) {
